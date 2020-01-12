@@ -70,9 +70,9 @@ class Text:
         self._corpus_bow = self.get_corpus_bow()
         self._corpus_tfidf = self.get_corpus_tfidf()
 
-        # self.lda = LDA(corpus_bow=self.corpus_bow,
-        #                dictionary=self.dictionary,
-        #                tokens=self.tokens)
+        self.lda = LDA(corpus=self.corpus_tfidf,
+                       dictionary=self.dictionary,
+                       tokens=self.tokens)
 
     # ------------------------
     #       properties
@@ -284,8 +284,8 @@ class Text:
 
 class LDA:
 
-    def __init__(self, corpus_bow, dictionary, tokens):
-        self.corpus_bow = corpus_bow
+    def __init__(self, corpus, dictionary, tokens):
+        self.corpus = corpus
         self.dictionary = dictionary
         self.tokens = tokens
 
@@ -297,7 +297,7 @@ class LDA:
             *args,
             **kwargs):
 
-        self.model = LdaMulticore(corpus=self.corpus_bow,
+        self.model = LdaMulticore(corpus=self.corpus,
                                   id2word=self.dictionary,
                                   num_topics=num_topics,
                                   alpha=alpha,
@@ -326,12 +326,14 @@ if __name__ == "__main__":
 
     # only work with abstracts that have more than a 100 citations
     data = data[data["n_citations"] > 100]
-    print(data.shape)
+
 
     # show word cloud of the corpus
-    text = Text(data)
+    text = Text(data, column="abstract")
+    print(text.n_docs)
     # search for a keyword in the corpus and return the index of documents with the keyword in them
-    search_results = text.search_for_token("cosmic")
+    text.lda.run()
+    print(text.lda.model.show_topics(5))
     #text.show_wordcloud(dpi=100)
 
     # data = data.sample(n=100, random_state=0)
