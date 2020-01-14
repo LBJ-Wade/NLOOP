@@ -13,7 +13,7 @@ import wordcloud
 
 import gensim
 from gensim.corpora import Dictionary
-from gensim.models import Phrases, TfidfModel, LdaModel, LdaMulticore, CoherenceModel
+from gensim.models import Phrases, TfidfModel, HdpModel, LdaMulticore, CoherenceModel
 
 from nltk import Counter
 from nltk.stem import PorterStemmer, WordNetLemmatizer, SnowballStemmer
@@ -71,6 +71,10 @@ class Text:
         self._corpus_tfidf = self.get_corpus_tfidf()
 
         self.lda = LDA(corpus=self.corpus_tfidf,
+                       dictionary=self.dictionary,
+                       tokens=self.tokens)
+
+        self.hdp = HDP(corpus=self.corpus_tfidf,
                        dictionary=self.dictionary,
                        tokens=self.tokens)
 
@@ -351,6 +355,45 @@ class LDA:
 
 
         return ldavis
+
+class HDP:
+
+    def __init__(self, corpus, dictionary, tokens):
+        self.corpus = corpus
+        self.dictionary = dictionary
+        self.tokens = tokens
+
+    def run(self,
+            kappa=1.0,
+            tau=64.0,
+            K=15,
+            T=150,
+            alpha=1,
+            gamma=1,
+            eta=0.01,
+            scale=1.0,
+            var_converge=0.0001,
+            outputdir=None,
+            random_state=None,
+            *args,
+            **kwargs):
+
+        self.model = HdpModel(corpus=self.corpus,
+                              id2word=self.dictionary,
+                              kappa=kappa,
+                              tau=tau,
+                              K=K,
+                              T=T,
+                              alpha=alpha,
+                              gamma=gamma,
+                              eta=eta,
+                              scale=scale,
+                              var_converge=var_converge,
+                              outputdir=outputdir,
+                              random_state=random_state,
+                              *args,
+                              **kwargs)
+
         print("Done!\nCheckout lda.model")
 
     def coherence_score(self, coherence="c_v"):
@@ -362,6 +405,8 @@ class LDA:
         coherence_score = coherence_model.get_coherence()
 
         return coherence_score
+
+
 
 
 if __name__ == "__main__":
