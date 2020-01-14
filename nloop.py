@@ -309,6 +309,48 @@ class LDA:
                                   *args,
                                   **kwargs)
 
+        if verbose:
+            print("Done!\nCheckout lda.model")
+
+    def coherence_score(self, coherence="c_v"):
+        coherence_model = CoherenceModel(model=self.model,
+                                         texts=self.tokens,
+                                         dictionary=self.dictionary,
+                                         coherence=coherence)
+
+        coherence_score = coherence_model.get_coherence()
+
+        return coherence_score
+
+    def visualize(self, mds='pcoa'):
+        """
+        visualize LDA using pyLDAvis
+
+        see: https://nbviewer.jupyter.org/github/bmabey/pyLDAvis/blob/master/notebooks/pyLDAvis_overview.ipynb#topic=8&lambda=1&term=
+        paper: https://nlp.stanford.edu/events/illvi2014/papers/sievert-illvi2014.pdf
+
+        Parameters
+        ----------
+        mds: str
+            scaling function
+            valild options are ['pcoa', 'tnse', mmds']
+
+        Returns
+        -------
+
+        """
+        import pyLDAvis
+        import pyLDAvis.gensim
+
+        print("Make sure you have pyLDAviz imported in the notebook:\n\n"
+              "import pyLDAvis\n"
+              "pyLDAvis.enable_notebook()\n")
+
+        ldavis = pyLDAvis.gensim.prepare(self.model, self.corpus, self.dictionary, mds='pcoa')
+        pyLDAvis.display(ldavis)
+
+
+        return ldavis
         print("Done!\nCheckout lda.model")
 
     def coherence_score(self, coherence="c_v"):
