@@ -273,8 +273,10 @@ class Text:
                 idx_with_token.append(idx)
 
                 doc_text = doc_text.replace(token,
-                                            f"<b><span style='color:{color}'><font size={font_size}>{token}</font></span></b>")
+                                            f"<b><span style='color:{color}'><font size"
+                                            f"={font_size}>{token}</font></span></b>")
                 display(HTML(doc_text))
+
 
         if len(idx_with_token) == 0:
             print("Nothing found!")
@@ -294,6 +296,7 @@ class LDA:
             alpha='symmetric',
             eta=None,
             random_state=0,
+            verbose=True,
             *args,
             **kwargs):
 
