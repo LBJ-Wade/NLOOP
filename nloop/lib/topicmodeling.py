@@ -3,7 +3,9 @@ This module contains clsases for Topic Modeling
 """
 
 from gensim.models import HdpModel, LdaMulticore, CoherenceModel
-
+from sklearn.model_selection import ParameterGrid
+import pandas as pd
+import pdb
 
 class TopicModeling:
 
@@ -16,6 +18,53 @@ class TopicModeling:
         coherence_score = coherence_model.get_coherence()
 
         return coherence_score
+
+    def grid_search(self, param_dict, eval_func, args=(), kwargs={}):
+        """
+        Grid search the eval_func using the provided param_dict in every .run()
+
+        Parameters
+        ----------
+        param_dict: dict
+            dictionary of parameters to be explored
+        eval_func: function
+            funciton to be evaluated at each grid point
+        args: tuple
+            arguments to be passed to eval_func
+        kwargs: dict
+            keyword arguments to be passed to eval_func
+
+        Returns
+        -------
+        grid dataframe
+
+        example:
+
+        >>> parameters = {'num_topics': [1,10, 50],
+                          'gamma_threshold': [0.001, 0.01, 0.1]}
+        >>> grid_df = text.lda.grid_search(parameters, text.lda.coherence_score)
+
+        >>> print(df)
+        gamma_threshold  num_topics  coherence_score
+        0    0.001           1         0.247374
+        1    0.001          10         0.299208
+        2    0.010           1         0.247374
+        3    0.010          10         0.311652
+        """
+
+        param_grid = list(ParameterGrid(param_dict))
+        grid_df = pd.DataFrame(param_grid)
+
+        grid_list = []
+
+        for i, row in grid_df.iterrows():
+            print(i, {**row})
+            self.run(**row)
+            grid_list.append(eval_func(*args, **kwargs))
+
+        grid_df[eval_func.__name__] = grid_list
+
+        return grid_df
 
 
 class LDA(TopicModeling):
