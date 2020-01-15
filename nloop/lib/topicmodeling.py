@@ -26,10 +26,22 @@ class LDA(TopicModeling):
         self.tokens = tokens
 
     def run(self,
-            num_topics=20,
+            num_topics=50,
             alpha='symmetric',
             eta=None,
+            decay=0.5,
+            offset=1.0,
+            gamma_threshold=0.001,
             random_state=0,
+            # eval_every=10,
+            # iterations=50,
+            # workers=None,
+            # chunksize=2000,
+            # passes=1,
+            # batch=False,
+            # minimum_probability=0.01,
+            # minimum_phi_value=0.01,
+            # per_word_topics=False,
             verbose=True,
             *args,
             **kwargs):
@@ -40,6 +52,9 @@ class LDA(TopicModeling):
                                   alpha=alpha,
                                   eta=eta,
                                   random_state=random_state,
+                                  decay=decay,
+                                  offset=offset,
+                                  gamma_threshold=gamma_threshold,
                                   *args,
                                   **kwargs)
 
