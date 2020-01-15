@@ -109,7 +109,7 @@ class HDP(TopicModeling):
             scale=1.0,
             var_converge=0.0001,
             outputdir=None,
-            random_state=None,
+            random_state=0,
             *args,
             **kwargs):
 
@@ -129,5 +129,5 @@ class HDP(TopicModeling):
                               *args,
                               **kwargs)
 
-        print("Done!\nCheckout lda.model")
+        print("Done!\nCheckout hdp.model")
 
