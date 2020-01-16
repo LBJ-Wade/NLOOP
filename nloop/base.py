@@ -3,6 +3,7 @@ base module for Natural Language [Object-Oriented] Processing
 """
 __author__ = ["Siavash Yasini", "Amin Oji"]
 
+
 import os
 from copy import deepcopy
 import pandas as pd
@@ -27,7 +28,7 @@ import logging
 logger = logging.getLogger("Log Message")
 logger.setLevel(logging.INFO)
 
-from .lib.topicmodeling import LDA, HDP
+from nloop.lib.topicmodeling import LDA, HDP
 
 #########################################################
 #                  Text Object
@@ -295,21 +296,5 @@ class Text:
 
 
 
-if __name__ == "__main__":
-
-    data_fname = os.path.join("..", "data", "set=physics:astro-ph-from=2007-01-01-to=2008-01-01.csv")
-    data = pd.read_csv(data_fname, index_col=0)
-
-    # only work with abstracts that have more than a 100 citations
-    data = data[data["n_citations"] > 100]
 
 
-    # show word cloud of the corpus
-    text = Text(data, column="abstract")
-    print(text.n_docs)
-    # search for a keyword in the corpus and return the index of documents with the keyword in them
-    text.lda.run()
-    print(text.lda.model.show_topics(5))
-    #text.show_wordcloud(dpi=100)
-
-    # data = data.sample(n=100, random_state=0)
