@@ -5,10 +5,9 @@ from pprint import pprint
 from nloop import Text
 
 # load the dataset
-data_fname = os.path.join(".", "data", "imdb_reviews.csv")
+data_fname = os.path.join(".", "data", "imdb_reviews_sample.csv")
 
 data = pd.read_csv(data_fname, error_bad_lines=False, encoding="latin")
-data = data.sample(200)
 
 # feed in the data into the Text class
 text = Text(data, column="review")
