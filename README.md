@@ -13,7 +13,8 @@ cd NLOOP
 pip install [-e] .
 ```
 
-the `-e` argument will install the package in editable mode which is suitable for developement. If you want to modify the code use this option.
+_NOTE_: Don't forget the `.` at the end! 
+The `-e` argument will install the package in editable mode which is suitable for developement. If you want to modify the code use this option.
 
 _(optional)_
 
