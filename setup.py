@@ -15,4 +15,12 @@ setup(
     description='A python package for conveniently processing, analyzing, and modeling text data'
     )
 
-
+# make sure the spacy 'en' library is installed
+import spacy
+try:
+    spacy.load('en')
+except OSError:
+    print("Spacy model 'en' is not installed. Downloading it now...")
+    from spacy.cli import download
+    download('en')
+    print("Done")
