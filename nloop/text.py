@@ -29,6 +29,7 @@ logger = logging.getLogger("Log Message")
 logger.setLevel(logging.INFO)
 
 from nloop.lib.topicmodeling import LDA, HDP
+from nloop.lib.similarity import Similarity
 
 #########################################################
 #                  Text Object
@@ -80,6 +81,9 @@ class Text:
         self.hdp = HDP(corpus=self.corpus_tfidf,
                        dictionary=self.dictionary,
                        tokens=self.tokens)
+
+        self.similarity = Similarity(corpus=self.corpus_tfidf,
+                                     num_features=len(self.dictionary))
 
     # ------------------------
     #       properties
@@ -196,7 +200,7 @@ class Text:
         plt.axis("off")
 
     def get_dictionary(self,
-                       no_below=5,  # FIXME: find the optimal cutoff
+                       no_below=0,  # FIXME: find the optimal cutoff
                        no_above=1,
                        keep_n=None,
                        keep_tokens=None,
