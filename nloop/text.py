@@ -238,8 +238,8 @@ class Text:
         This uses gensim.models.TfidfModel
         """
 
-        tfidfmodel = TfidfModel(self.corpus_bow)
-        corpus_tfidf = [tfidfmodel[bow] for bow in self.corpus_bow]
+        self._bow2tfidf = TfidfModel(self.corpus_bow)
+        corpus_tfidf = [self._bow2tfidf[bow] for bow in self.corpus_bow]
         return corpus_tfidf
 
     def get_vocab(self):
