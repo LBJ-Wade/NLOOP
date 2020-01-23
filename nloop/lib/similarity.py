@@ -21,8 +21,6 @@ class Similarity:
         self.corpus = corpus
         self.num_features = num_features
 
-        print(self.num_features)
-
     def index(self, corpus, mode="MatrixSimilarity"):
         if mode == "MatrixSimilarity":
             self._index = MatrixSimilarity(self.corpus, num_features=self.num_features)
