@@ -10,6 +10,8 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
+import spacy
+
 import wordcloud
 
 import gensim
@@ -24,6 +26,7 @@ from nltk.corpus import stopwords
 #TODO: add the equivalent for terminal
 from IPython.core.display import HTML, display
 from tqdm.auto import tqdm
+
 import logging
 logger = logging.getLogger("Log Message")
 logger.setLevel(logging.INFO)
@@ -37,38 +40,55 @@ from nloop.lib.similarity import Similarity
 
 class Text:
 
+    nlp = spacy.load("en")
+
+    # Full list here: https://spacy.io/api/annotation
+    remove = ['ADP',
+              'ADV',
+              'AUX',
+              'CONJ',
+              'SCONJ',
+              'INTJ',
+              'DET',
+              'PART',
+              'PUNCT',
+              'SYM',
+              'SPACE',
+              ]
+
     def __init__(self,
-                 data,  # normally a list of lists:
-                 column=None,  # in case the input is a dataframe
+                 docs,  # normally a list of lists:
+                 lemmatize=True,
+                 phrases=True,
                  ):
+
         """
         Class for loading, processing, and modeling text data
 
         Parameters
         ----------
-        data: list or pandas.DataFrame
+        docs: list
             Input raw data.
-            Can be a list of docs [ doc1, doc2, ... ] or a pandas dataframe.
+            Can be a list of docs [ doc1, doc2, ... ] or a pandas dataframe column.
             Each doc is a string.
 
-        column: str
-            Selects a column from the input data as data[column].
-            Set to None if the input is a list of documents.
+        lemmatize: bool
+            If True, the processed tokens will be lemmatized
+
+        phrases: bool
+            If True, bigrams and trigrams are extracted using gensim.models.Phrases
+
         """
 
+        self.nlp = Text.nlp
 
-        self.lemmatizer = WordNetLemmatizer()
-        self.stemmer = PorterStemmer()
-        self.stops = stopwords.words("english")
-
-        #TODO: add __slots__
-        self.docs = data  # pandas dataframe
-        if column:
-            self.docs = data[column]
+        self.docs = docs
         self.n_docs = len(self.docs)
 
+        self._raw_tokens = self.get_raw_tokens()
+
         # tokenize and process
-        self._tokens = self.process()
+        self._tokens = self.process_tokens(lemmatize=lemmatize, phrases=phrases)
         self._token_counter = self.counter()
         self._dictionary = self.get_dictionary()
         self._corpus_bow = self.get_corpus_bow()
@@ -91,7 +111,7 @@ class Text:
 
     @property
     def raw_tokens(self):
-        self._raw_tokens = list(self._tokenize())
+        #self._raw_tokens = list(self._tokenize())
         return self._raw_tokens
 
     @property
@@ -117,70 +137,103 @@ class Text:
     #         methods
     # ------------------------
 
-    def _tokenize(self):
-        """generate a list of tokens of each document"""
-        for doc in self.docs:
-            doc = doc.replace("\n", " ")
-            yield gensim.utils.simple_preprocess(doc, deacc=True)
+    def get_raw_tokens(self):
+        docs = self.nlp.pipe(self.docs)
+        print("Extracting raw tokens...")
+        raw_tokens = [[token for token in doc] for doc in tqdm(docs, total=self.n_docs)]
+
+        return raw_tokens
 
 
-    # TODO: write another process function using sklearn?
-    def process(self,
-                remove_stops=True,
-                make_bigrams=True,
-                make_trigrams=True,
-                lemmatize=True,
-                stem=True,
-                ):
-        """Process text.docs using gensim:
-        (1) remove stopwords, (2) find bigrams and trigrams, (3) lemmatize, and (4) stem"""
+    def process_tokens(self, lemmatize=True, phrases=True):
 
-        # initialize a token generator
-        Docs = self._tokenize()
-
-        print("Removing stopwords...")
-        if remove_stops:
-            # Remove stopworsds
-            Docs = [[word for word in doc if word not in self.stops and not word.isdigit()] for
-                    doc in tqdm(Docs, total=self.n_docs)]
-
-        # TODO: modify this so Docs can be passed as a generator
-        if make_bigrams:
-            bigrams = Phrases(Docs, delimiter=b" ", min_count=2)
-
-        if make_trigrams:
-            trigrams = Phrases(bigrams[Docs], delimiter=b" ", min_count=2)
-
-
-        # extract bigrams and trigrams
-        if make_bigrams:
-            print("Finding bigrams...")
-            Docs = [bigrams[doc] for doc in tqdm(Docs, total=self.n_docs)]
-
-        if make_trigrams:
-            #FIXME: Is this actually returning the correct trigrams?
-            # or is it returning 4-grams?
-            print("Finding trigrams...")
-            Docs = [trigrams[doc] for doc in tqdm(Docs, total=self.n_docs)]
-
+        print("Processing tokens...")
+        tokens = [[token for token in doc
+                   if (not token.is_stop) and (token.pos_ not in Text.remove)]
+                  for doc in tqdm(self.raw_tokens, total=self.n_docs)]
 
         if lemmatize:
-            # lemmatize the n-grams
-            print("Lemmatizing nouns...")
-            Docs = [[self.lemmatizer.lemmatize(word, pos="n") for word in doc]
-                    for doc in tqdm(Docs, total=self.n_docs)]
-            print("Lemmatizing verbs...")
-            Docs = [[self.lemmatizer.lemmatize(word, pos="v") for word in doc]
-                    for doc in tqdm(Docs, total=self.n_docs)]
+            tokens = [[token.lemma_ for token in doc] for doc in tokens]
 
-        if stem:
-            # stem the n-grams
-            print("Stemming...")
-            Docs = [[self.stemmer.stem(word) for word in doc]
-                    for doc in tqdm(Docs, total=self.n_docs)]
+        if phrases:
+            bigrams = Phrases(tokens, delimiter=b" ", min_count=2)
+            trigrams = Phrases(bigrams[tokens], delimiter=b" ", min_count=2)
 
-            print("Done!")
-        return Docs
+            # extract bigrams and trigrams
+
+            print("Finding bigrams...")
+            tokens = [bigrams[doc] for doc in tqdm(tokens, total=self.n_docs)]
+
+            # FIXME: Is this actually returning the correct trigrams?
+            # or is it returning 4-grams?
+            print("Finding trigrams...")
+            tokens = [trigrams[doc] for doc in tqdm(tokens, total=self.n_docs)]
+
+        return tokens
+        # def _tokenize(self):
+        #     """generate a list of tokens of each document"""
+        #     for doc in self.docs:
+        #         doc = doc.replace("\n", " ")
+        #         yield gensim.utils.simple_preprocess(doc, deacc=True)
+        #
+        #
+        # # TODO: write another process function using sklearn?
+        # def process(self,
+        #             remove_stops=True,
+        #             make_bigrams=True,
+        #             make_trigrams=True,
+        #             lemmatize=True,
+        #             stem=True,
+        #             ):
+        #     """Process text.docs using gensim:
+        #     (1) remove stopwords, (2) find bigrams and trigrams, (3) lemmatize, and (4) stem"""
+        #
+        #     # initialize a token generator
+        #     Docs = self._tokenize()
+        #
+        #     print("Removing stopwords...")
+        #     if remove_stops:
+        #         # Remove stopworsds
+        #         Docs = [[word for word in doc if word not in self.stops and not word.isdigit()] for
+        #                 doc in tqdm(Docs, total=self.n_docs)]
+        #
+        #     # TODO: modify this so Docs can be passed as a generator
+        #     if make_bigrams:
+        #         bigrams = Phrases(Docs, delimiter=b" ", min_count=2)
+        #
+        #     if make_trigrams:
+        #         trigrams = Phrases(bigrams[Docs], delimiter=b" ", min_count=2)
+        #
+        #
+        #     # extract bigrams and trigrams
+        #     if make_bigrams:
+        #         print("Finding bigrams...")
+        #         Docs = [bigrams[doc] for doc in tqdm(Docs, total=self.n_docs)]
+        #
+        #     if make_trigrams:
+        #         #FIXME: Is this actually returning the correct trigrams?
+        #         # or is it returning 4-grams?
+        #         print("Finding trigrams...")
+        #         Docs = [trigrams[doc] for doc in tqdm(Docs, total=self.n_docs)]
+        #
+        #
+        #     if lemmatize:
+        #         # lemmatize the n-grams
+        #         print("Lemmatizing nouns...")
+        #         Docs = [[self.lemmatizer.lemmatize(word, pos="n") for word in doc]
+        #                 for doc in tqdm(Docs, total=self.n_docs)]
+        #         print("Lemmatizing verbs...")
+        #         Docs = [[self.lemmatizer.lemmatize(word, pos="v") for word in doc]
+        #                 for doc in tqdm(Docs, total=self.n_docs)]
+        #
+        #     if stem:
+        #         # stem the n-grams
+        #         print("Stemming...")
+        #         Docs = [[self.stemmer.stem(word) for word in doc]
+        #                 for doc in tqdm(Docs, total=self.n_docs)]
+        #
+        #         print("Done!")
+        #     return Docs
 
     def counter(self):
         """Return a gensim counter of all tokens"""
