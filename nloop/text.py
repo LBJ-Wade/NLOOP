@@ -85,8 +85,8 @@ class Text:
 
         self.nlp = Text.nlp
 
-        self.docs = docs
-        self.n_docs = len(self.docs)
+        self.raw_docs = docs
+        self.n_docs = len(self.raw_docs)
 
         self._raw_tokens = self.get_raw_tokens()
 
@@ -96,6 +96,7 @@ class Text:
         self._dictionary = self.get_dictionary()
         self._corpus_bow = self.get_corpus_bow()
         self._corpus_tfidf = self.get_corpus_tfidf()
+        self._clean_docs = self.get_clean_docs()
 
         self.lda = LDA(corpus=self.corpus_tfidf,
                        dictionary=self.dictionary,
@@ -111,6 +112,10 @@ class Text:
     # ------------------------
     #       properties
     # ------------------------
+
+    @property
+    def docs(self):
+        return self._clean_docs
 
     @property
     def raw_tokens(self):
@@ -141,9 +146,9 @@ class Text:
     # ------------------------
 
     def get_raw_tokens(self):
-        docs = self.nlp.pipe(self.docs)
+        raw_docs = self.nlp.pipe(self.raw_docs)
         print("Extracting raw tokens...")
-        raw_tokens = [[token for token in doc] for doc in tqdm(docs, total=self.n_docs)]
+        raw_tokens = [[token for token in doc] for doc in tqdm(raw_docs, total=self.n_docs)]
 
         return raw_tokens
 
@@ -151,9 +156,9 @@ class Text:
     def process_tokens(self, lemmatize=True, phrases=True):
 
         print("Processing tokens...")
-        tokens = [[token for token in doc
+        tokens = [[token for token in raw_token
                    if (not token.is_stop) and (token.pos_ not in Text.remove)]
-                  for doc in tqdm(self.raw_tokens, total=self.n_docs)]
+                  for raw_token in tqdm(self.raw_tokens, total=self.n_docs)]
 
         if lemmatize:
             tokens = [[token.lemma_ for token in doc] for doc in tokens]
@@ -164,18 +169,16 @@ class Text:
 
             # extract bigrams and trigrams
 
-            print("Finding bigrams...")
-            tokens = [bigrams[doc] for doc in tqdm(tokens, total=self.n_docs)]
+            print("Finding phrases...")
+            tokens = [bigrams[doc] for doc in tokens]
 
-            # FIXME: Is this actually returning the correct trigrams?
-            # or is it returning 4-grams?
-            print("Finding trigrams...")
-            tokens = [trigrams[doc] for doc in tqdm(tokens, total=self.n_docs)]
-
+            tokens = [trigrams[doc] for doc in tokens]
+            print("Almost done...")
+            
         return tokens
         # def _tokenize(self):
         #     """generate a list of tokens of each document"""
-        #     for doc in self.docs:
+        #     for doc in self.raw_docs:
         #         doc = doc.replace("\n", " ")
         #         yield gensim.utils.simple_preprocess(doc, deacc=True)
         #
@@ -314,6 +317,11 @@ class Text:
         corpus_id = [self.dictionary.doc2idx(doc) for doc in self.tokens]
         return corpus_id
 
+    def get_clean_docs(self):
+
+        return list(self.nlp.pipe([" ".join(token) for token in self.tokens]))
+
+
     # TODO: fix bug with bigrams and trigrams
     # TODO: add option for printing in terminal
     def search_for_token(self, token, color="red", font_size=5):
@@ -324,7 +332,7 @@ class Text:
         token = self.lemmatizer.lemmatize(token, pos="v")
         token = self.stemmer.stem(token)
 
-        print(f"Looking for '{token}' in all the docs...")
+        print(f"Looking for '{token}' in all the raw_docs...")
 
         # docs_with_token = []
         idx_with_token = []
