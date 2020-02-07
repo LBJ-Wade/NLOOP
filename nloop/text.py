@@ -40,7 +40,8 @@ from nloop.lib.similarity import Similarity
 
 class Text:
 
-    nlp = spacy.load("en")
+
+    nlp = spacy.load("en", disable=["parser", "ner"])
 
     # Full list here: https://spacy.io/api/annotation
     remove = ['ADP',
@@ -54,6 +55,8 @@ class Text:
               'PUNCT',
               'SYM',
               'SPACE',
+              'NUM',
+              'X',
               ]
 
     def __init__(self,
