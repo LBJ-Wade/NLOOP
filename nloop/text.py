@@ -92,8 +92,8 @@ class Text:
 
         # tokenize and process
         self._tokens = self.process_tokens(lemmatize=lemmatize, phrases=phrases)
-        self._token_counter = self.counter()
-        self._dictionary = self.get_dictionary()
+        self._token_counter = self._counter()
+        self._dictionary = Dictionary(self.tokens)
         self._corpus_bow = self.get_corpus_bow()
         self._corpus_tfidf = self.get_corpus_tfidf()
         self._clean_docs = self.get_clean_docs()
@@ -191,7 +191,7 @@ class Text:
         #             lemmatize=True,
         #             stem=True,
         #             ):
-        #     """Process text.docs using gensim:
+        #     """Process text.raw_docs using gensim:
         #     (1) remove stopwords, (2) find bigrams and trigrams, (3) lemmatize, and (4) stem"""
         #
         #     # initialize a token generator
@@ -241,8 +241,8 @@ class Text:
         #         print("Done!")
         #     return Docs
 
-    def counter(self):
-        """Return a gensim counter of all tokens"""
+    def _counter(self):
+        """Return a gensim _counter of all tokens"""
         return Counter([word for doc in self.tokens for word in doc])
 
     def show_wordcloud(self, figsize=(10, 10), dpi=100):
@@ -258,11 +258,12 @@ class Text:
         plt.imshow(WC)
         plt.axis("off")
 
-    def get_dictionary(self,
-                       no_below=0,  # FIXME: find the optimal cutoff
-                       no_above=1,
-                       keep_n=None,
-                       keep_tokens=None,
+    def filter_extremes(self,
+                        no_below=0,  # FIXME: find the optimal cutoff
+                        no_above=1,
+                        keep_n=None,
+                        keep_tokens=None,
+                        inplace=True,
                        ):
         """Construct the tokens dictionary using gensim.corpora.Dictionary
 
@@ -281,11 +282,19 @@ class Text:
         keep_tokens : iterable of str
             Iterable of tokens that **must** stay in dictionary after filtering."""
 
-        dictionary = Dictionary(self.tokens)
-        dictionary.filter_extremes(no_below=no_below, no_above=no_above, keep_n=keep_n,
+        dictionary = deepcopy(self.dictionary)
+        dictionary.filter_extremes(no_below=no_below,
+                                   no_above=no_above,
+                                   keep_n=keep_n,
                                    keep_tokens=keep_tokens)
 
-        return dictionary
+        filtered_tokens = [[token for token in doc if token in dictionary.token2id]
+                           for doc in self.tokens]
+        if inplace:
+            self._tokens = filtered_tokens
+            self._clean_docs = self.get_clean_docs()
+        else:
+            return filtered_tokens
 
     def get_corpus_bow(self):
         """Construct the corpus bag of words
