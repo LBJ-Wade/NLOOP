@@ -315,9 +315,10 @@ class Text:
             return filtered_tokens
 
     def bow_transformer(self, doc):
-        """transforms the input doc to bag of words according to the corpus bow"""
-        
-        return self.dictionary.doc2bow(doc.split(" "))
+        """transforms the input doc to bag-of-words according to the corpus bow"""
+        doc_bow = self.dictionary.doc2bow(doc.split(" "))
+
+        return doc_bow
 
     def get_corpus_bow(self):
         """Construct the corpus bag of words
@@ -327,14 +328,24 @@ class Text:
         corpus_bow = [self.dictionary.doc2bow(doc) for doc in self.tokens]
         return corpus_bow
 
+    def bow2tfidf(self, bow):
+
+        return TfidfModel(self.corpus_bow)[bow]
+
+    def tfidf_transformer(self, doc):
+        """transform the input doc to Tfidf according to the corpus tfidf model"""
+        doc_bow = self.bow_transformer(doc)
+        doc_tfidf = self.bow2tfidf(doc_bow)
+        return doc_tfidf
+
     def get_corpus_tfidf(self):
         """Construct the corpus Tfidf (term frequency inverse document frequency
 
         This uses gensim.models.TfidfModel
         """
 
-        self._bow2tfidf = TfidfModel(self.corpus_bow)
-        corpus_tfidf = [self._bow2tfidf[bow] for bow in self.corpus_bow]
+        bow2tfidf = TfidfModel(self.corpus_bow)
+        corpus_tfidf = [bow2tfidf[bow] for bow in self.corpus_bow]
         return corpus_tfidf
 
     def get_vocab(self):
