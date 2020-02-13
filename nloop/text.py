@@ -314,6 +314,11 @@ class Text:
         else:
             return filtered_tokens
 
+    def bow_transformer(self, doc):
+        """transforms the input doc to bag of words according to the corpus bow"""
+        
+        return self.dictionary.doc2bow(doc.split(" "))
+
     def get_corpus_bow(self):
         """Construct the corpus bag of words
 
