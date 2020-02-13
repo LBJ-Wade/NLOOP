@@ -88,15 +88,20 @@ class Text:
         self.raw_docs = docs
         self.n_docs = len(self.raw_docs)
 
-        self._raw_tokens = self.get_raw_tokens()
+        self._docs = list(tqdm(self.nlp.pipe(self.raw_docs), total=self.n_docs, desc="Passing docs through nlp.pipe"))
+
+        #self._raw_tokens = self.get_raw_tokens()
 
         # tokenize and process
         self._tokens = self.process_tokens(lemmatize=lemmatize, phrases=phrases)
-        self._token_counter = self._counter()
+        if "parser" in self.nlp.pipe_names:
+            self._sentences = self.get_sentences()
+        #self._token_counter = self._counter()
+        self._clean_docs = self.get_clean_docs()
         self._dictionary = Dictionary(self.tokens)
         self._corpus_bow = self.get_corpus_bow()
         self._corpus_tfidf = self.get_corpus_tfidf()
-        self._clean_docs = self.get_clean_docs()
+
 
         self.lda = LDA(corpus=self.corpus_tfidf,
                        dictionary=self.dictionary,
@@ -115,20 +120,31 @@ class Text:
 
     @property
     def docs(self):
+        return self._docs
+
+    def clean_docs(self):
         return self._clean_docs
 
     @property
     def raw_tokens(self):
         #self._raw_tokens = list(self._tokenize())
-        return self._raw_tokens
+        return self.get_raw_tokens()
 
     @property
     def tokens(self):
-        return list(self._tokens)
+        return self._tokens
 
     @property
+    def token_ids(self):
+        #try:
+         #   self._token_ids
+        #except AttributeError:
+        self._token_ids = [[self.dictionary.token2id[token] for token in doc] for doc in
+                           self.tokens]
+        return self._token_ids
+    @property
     def token_counter(self):
-        return self._token_counter
+        return self._token_counter()
 
     @property
     def dictionary(self):
@@ -146,35 +162,30 @@ class Text:
     # ------------------------
 
     def get_raw_tokens(self):
-        raw_docs = self.nlp.pipe(self.raw_docs)
-        print("Extracting raw tokens...")
-        raw_tokens = [[token for token in doc] for doc in tqdm(raw_docs, total=self.n_docs)]
+
+        raw_tokens = [[token for token in doc] for doc in tqdm(self.docs, total=self.n_docs, desc="Extracting raw tokens")]
 
         return raw_tokens
 
 
     def process_tokens(self, lemmatize=True, phrases=True):
 
-        print("Processing tokens...")
         tokens = [[token for token in raw_token
                    if (not token.is_stop) and (token.pos_ not in Text.remove)]
-                  for raw_token in tqdm(self.raw_tokens, total=self.n_docs)]
+                  for raw_token in tqdm(self.docs, total=self.n_docs, desc="Processing tokens")]
 
         if lemmatize:
             tokens = [[token.lemma_ for token in doc] for doc in tokens]
 
         if phrases:
-            bigrams = Phrases(tokens, delimiter=b" ", min_count=2)
-            trigrams = Phrases(bigrams[tokens], delimiter=b" ", min_count=2)
+            bigrams = Phrases(tokens, delimiter=b"_", min_count=2)
+            trigrams = Phrases(bigrams[tokens], delimiter=b"_", min_count=2)
 
             # extract bigrams and trigrams
 
-            print("Finding phrases...")
             tokens = [bigrams[doc] for doc in tokens]
-
             tokens = [trigrams[doc] for doc in tokens]
-            print("Almost done...")
-            
+
         return tokens
         # def _tokenize(self):
         #     """generate a list of tokens of each document"""
@@ -328,7 +339,8 @@ class Text:
 
     def get_clean_docs(self):
 
-        return list(self.nlp.pipe([" ".join(token) for token in self.tokens]))
+        return list(tqdm(self.nlp.pipe([" ".join(token) for token in self.tokens]),
+                         total=self.n_docs, desc="Putting clean tokens back together"))
 
 
     # TODO: fix bug with bigrams and trigrams
