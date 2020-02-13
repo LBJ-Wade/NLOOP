@@ -252,8 +252,15 @@ class Text:
         #         print("Done!")
         #     return Docs
 
-    def _counter(self):
-        """Return a gensim _counter of all tokens"""
+    def get_sentences(self):
+        """Return a list of spacy sentences"""
+
+        sents = [[sent for sent in doc.sents] for doc in self.docs]
+
+        return list(sents)
+
+    def _token_counter(self):
+        """Return the counts of all tokens"""
         return Counter([word for doc in self.tokens for word in doc])
 
     def show_wordcloud(self, figsize=(10, 10), dpi=100):
