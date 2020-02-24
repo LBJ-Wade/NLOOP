@@ -64,6 +64,7 @@ class Keywords:
     def __init__(self, keywords):
 
         self._keywords = keywords
+        self._texts = [[kw.text for kw in kws] for kws in self._keywords]
         self._ranks = [[kw.rank for kw in kws] for kws in self._keywords]
         self._counts = [[kw.count for kw in kws] for kws in self._keywords]
         self._chunks = [[kw.chunks for kw in kws] for kws in self._keywords]
@@ -74,6 +75,10 @@ class Keywords:
 
     def __repr__(self):
         return repr(self._keywords)
+
+    @property
+    def texts(self):
+        return self._texts
 
     @property
     def ranks(self):
