@@ -177,19 +177,25 @@ class Text:
                 total=self.n_docs,  desc="Removing HTML tags")]
     def get_raw_tokens(self):
 
-        raw_tokens = [[token for token in doc] for doc in tqdm(self.docs, total=self.n_docs, desc="Extracting raw tokens")]
+        raw_tokens = [[token for token in doc] for doc in tqdm(self.docs,
+                        total=self.n_docs, desc="Extracting raw tokens")]
 
         return raw_tokens
 
 
-    def process_tokens(self, lemmatize=True, phrases=True):
+    def process_tokens(self, lemmatize=True, lower=True, phrases=True):
 
         tokens = [[token for token in raw_token
-                   if (not token.is_stop) and (token.pos_ not in Text.remove)]
+                   if (not token.is_stop) and (token.pos_ not in Text.remove_pos)]
                   for raw_token in tqdm(self.docs, total=self.n_docs, desc="Processing tokens")]
 
         if lemmatize:
             tokens = [[token.lemma_ for token in doc] for doc in tokens]
+        else:
+            tokens = [[token.text for token in doc] for doc in tokens]
+
+        if lower:
+            tokens = [[token.lower() for token in doc] for doc in tokens]
 
         if phrases:
             bigrams = Phrases(tokens, delimiter=b"_", min_count=2)
