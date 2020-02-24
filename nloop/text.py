@@ -376,9 +376,8 @@ class Text:
 
     def get_clean_docs(self):
 
-        return list(tqdm(self.nlp.pipe([" ".join(token) for token in self.tokens]),
-                         total=self.n_docs, desc="Putting clean tokens back together"))
-
+        return [" ".join(token) for token in tqdm(self.tokens,
+                         total=self.n_docs, desc="Putting clean tokens back together")]
 
     # TODO: fix bug with bigrams and trigrams
     # TODO: add option for printing in terminal
