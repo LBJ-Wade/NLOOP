@@ -25,6 +25,7 @@ from nltk.corpus import stopwords
 
 #TODO: add the equivalent for terminal
 from IPython.core.display import HTML, display
+import pytextrank
 from tqdm.auto import tqdm
 
 import logging
@@ -41,29 +42,81 @@ import re
 #                  Text Object
 #########################################################
 
+class Docs:
+
+    def __init__(self, text, docs):
+        self._docs = docs
+        self._keywords = Keywords(text._keywords)
+
+    def __getitem__(self, item):
+        return self._docs[item]
+
+    def __repr__(self):
+        return repr(self._docs)
+
+    @ property
+    def keywords(self):
+        return self._keywords
+
+
+class Keywords:
+
+    def __init__(self, keywords):
+
+        self._keywords = keywords
+        self._ranks = [[kw.rank for kw in kws] for kws in self._keywords]
+        self._counts = [[kw.count for kw in kws] for kws in self._keywords]
+        self._chunks = [[kw.chunks for kw in kws] for kws in self._keywords]
+
+
+    def __getitem__(self, item):
+        return self._keywords[item]
+
+    def __repr__(self):
+        return repr(self._keywords)
+
+    @property
+    def ranks(self):
+        return self._ranks
+
+    @property
+    def counts(self):
+        return self._counts
+
+    @property
+    def chunks(self):
+        return self._chunks
+
+
+
 class Text:
 
+    nlp = spacy.load("en")
 
-    nlp = spacy.load("en", disable=["parser", "ner"])
+
+    #nlp = spacy.load("en", disable=["parser", "ner"])
 
     # Full list here: https://spacy.io/api/annotation
-    remove = ['ADP',
-              'ADV',
-              'AUX',
-              'CONJ',
-              'SCONJ',
-              'INTJ',
-              'DET',
-              'PART',
-              'PUNCT',
-              'SYM',
-              'SPACE',
-              'NUM',
-              'X',
-              ]
+    remove_pos = ['ADP',
+                  'ADV',
+                  'AUX',
+                  'CONJ',
+                  'SCONJ',
+                  'INTJ',
+                  'DET',
+                  'PART',
+                  'PUNCT',
+                  'SYM',
+                  'SPACE',
+                  'NUM',
+                  'X',
+                  ]
+
+    tags_re = re.compile(r'<[^>]+>')
 
     def __init__(self,
                  docs,  # normally a list of lists:
+                 fast=False,
                  remove_html_tags=True,
                  lemmatize=True,
                  phrases=True,
@@ -79,6 +132,8 @@ class Text:
             Can be a list of docs [ doc1, doc2, ... ] or a pandas dataframe column.
             Each doc is a string.
 
+        fast: bool
+            If True, "parser" and "ner" are removed from the nlp pipeline
 
         remove_html_tags: bool
             If True, <html tags> will be removed before processing the text
@@ -93,20 +148,39 @@ class Text:
 
         self.nlp = Text.nlp
 
+        # disable parser and ner for a fast render
+        if fast:
+            self.nlp = spacy.load("en", disable=["parser", "ner"])
+
+        # otherwise add pytextrank to the pipeline
+        else:
+            tr = pytextrank.TextRank()
+            # Text.nlp = spacy.load("en")
+            self.nlp.add_pipe(tr.PipelineComponent, name='textrank', last=True)
+            self._keywords = []
+
+        print(f"nlp.pipe_names = {self.nlp.pipe_names}")
+
+        # read in the raw documents
         self.raw_docs = docs
         self.n_docs = len(self.raw_docs)
 
-        self._docs = list(tqdm(self.nlp.pipe(self.raw_docs), total=self.n_docs, desc="Passing docs through nlp.pipe"))
         if remove_html_tags:
             self.raw_docs = self.remove_tags()
 
+        # FIXME: loop has to be True because of bug in spacy pytextrank
+        self._docs = Docs(text=self,
+                          docs=self._nlp_docs(loop=True))
 
         #self._raw_tokens = self.get_raw_tokens()
 
         # tokenize and process
         self._tokens = self.process_tokens(lemmatize=lemmatize, phrases=phrases)
+
         if "parser" in self.nlp.pipe_names:
-            self._sentences = self.get_sentences()
+            pass
+            #self._sentences = self.get_sentences()
+
         #self._token_counter = self._counter()
         self._clean_docs = self.get_clean_docs()
         self._dictionary = Dictionary(self.tokens)
@@ -133,6 +207,8 @@ class Text:
     def docs(self):
         return self._docs
 
+
+    @property
     def clean_docs(self):
         return self._clean_docs
 
@@ -175,6 +251,27 @@ class Text:
     def remove_tags(self):
         return [Text.tags_re.sub(" ", doc) for doc in tqdm(self.raw_docs,
                 total=self.n_docs,  desc="Removing HTML tags")]
+
+
+    def _nlp_docs(self, loop=True):
+
+        if not loop:
+            docs = list(tqdm(self.nlp.pipe(self.raw_docs), total=self.n_docs,
+                               desc="Passing docs through nlp.pipe"))
+
+        else:
+            #self._keywords = []
+            docs = []
+            for doc in tqdm(self.nlp.pipe(self.raw_docs),
+                            total=self.n_docs,
+                            desc="Passing docs through nlp.pipe loop"):
+                #    d = self.nlp(doc)
+                keywords = [kw for kw in doc._.phrases]
+                self._keywords.append(keywords)
+                docs.append(doc)
+
+        return docs
+
     def get_raw_tokens(self):
 
         raw_tokens = [[token for token in doc] for doc in tqdm(self.docs,
@@ -223,7 +320,7 @@ class Text:
         #             stem=True,
         #             ):
         #     """Process text.raw_docs using gensim:
-        #     (1) remove stopwords, (2) find bigrams and trigrams, (3) lemmatize, and (4) stem"""
+        #     (1) remove_pos stopwords, (2) find bigrams and trigrams, (3) lemmatize, and (4) stem"""
         #
         #     # initialize a token generator
         #     Docs = self._tokenize()
@@ -282,6 +379,10 @@ class Text:
     def _token_counter(self):
         """Return the counts of all tokens"""
         return Counter([word for doc in self.tokens for word in doc])
+
+    def _token_frequency(self):
+        """Returns the frequency of all tokens"""
+        pass
 
     def show_wordcloud(self, figsize=(10, 10), dpi=100):
         """Plot the processed tokens wordcloud"""
