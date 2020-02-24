@@ -34,6 +34,9 @@ logger.setLevel(logging.INFO)
 from nloop.lib.topicmodeling import LDA, HDP
 from nloop.lib.similarity import Similarity
 
+
+import re
+
 #########################################################
 #                  Text Object
 #########################################################
@@ -61,6 +64,7 @@ class Text:
 
     def __init__(self,
                  docs,  # normally a list of lists:
+                 remove_html_tags=True,
                  lemmatize=True,
                  phrases=True,
                  ):
@@ -74,6 +78,10 @@ class Text:
             Input raw data.
             Can be a list of docs [ doc1, doc2, ... ] or a pandas dataframe column.
             Each doc is a string.
+
+
+        remove_html_tags: bool
+            If True, <html tags> will be removed before processing the text
 
         lemmatize: bool
             If True, the processed tokens will be lemmatized
@@ -89,6 +97,9 @@ class Text:
         self.n_docs = len(self.raw_docs)
 
         self._docs = list(tqdm(self.nlp.pipe(self.raw_docs), total=self.n_docs, desc="Passing docs through nlp.pipe"))
+        if remove_html_tags:
+            self.raw_docs = self.remove_tags()
+
 
         #self._raw_tokens = self.get_raw_tokens()
 
@@ -161,6 +172,9 @@ class Text:
     #         methods
     # ------------------------
 
+    def remove_tags(self):
+        return [Text.tags_re.sub(" ", doc) for doc in tqdm(self.raw_docs,
+                total=self.n_docs,  desc="Removing HTML tags")]
     def get_raw_tokens(self):
 
         raw_tokens = [[token for token in doc] for doc in tqdm(self.docs, total=self.n_docs, desc="Extracting raw tokens")]
