@@ -14,6 +14,7 @@ import spacy
 
 import wordcloud
 
+
 import gensim
 from gensim.corpora import Dictionary
 from gensim.models import Phrases, TfidfModel
@@ -34,7 +35,7 @@ logger.setLevel(logging.INFO)
 
 from nloop.lib.topicmodeling import LDA, HDP
 from nloop.lib.similarity import Similarity
-
+from nloop.lib.utils import lazy_property
 
 import re
 
@@ -44,9 +45,10 @@ import re
 
 class Docs:
 
-    def __init__(self, text, docs):
+    def __init__(self, text, docs, fast=True):
         self._docs = docs
-        self._keywords = Keywords(text._keywords)
+
+
 
     def __getitem__(self, item):
         return self._docs[item]
@@ -93,13 +95,52 @@ class Keywords:
         return self._chunks
 
 
+class Sentences:
+
+    def __init__(self, sentences):
+
+        self._sentences = sentences
+        #self._ents = [[kw.ents for kw in kws] for kws in self._ents]
+        #self._counts = [[kw.count for kw in kws] for kws in self._keywords]
+        #self._chunks = [[kw.chunks for kw in kws] for kws in self._keywords]
+
+
+    def __getitem__(self, item):
+        return self._sentences[item]
+
+    def __repr__(self):
+        return repr(self._sentences)
+
+    @lazy_property
+    def texts(self):
+        return [[sent.text for sent in sents] for sents in self._sentences]
+
+    @lazy_property
+    def ents(self):
+        return [[sent.ents for sent in sents] for sents in self._sentences]
+
+    @lazy_property
+    def noun_chunks(self):
+        return [[list(sent.noun_chunks) for sent in sents] for sents in self._sentences]
+
+    @lazy_property
+    def start(self):
+        return [[sent.start for sent in sents] for sents in self._sentences]
+
+    @lazy_property
+    def end(self):
+        return [[sent.end for sent in sents] for sents in self._sentences]
+
+    @lazy_property
+    def start_char(self):
+        return [[sent.start_char for sent in sents] for sents in self._sentences]
+
+    @lazy_property
+    def end_char(self):
+        return [[sent.end_char for sent in sents] for sents in self._sentences]
+
 
 class Text:
-
-    nlp = spacy.load("en")
-
-
-    #nlp = spacy.load("en", disable=["parser", "ner"])
 
     # Full list here: https://spacy.io/api/annotation
     remove_pos = ['ADP',
@@ -121,7 +162,7 @@ class Text:
 
     def __init__(self,
                  docs,  # normally a list of lists:
-                 fast=False,
+                 fast=True,
                  remove_html_tags=True,
                  lemmatize=True,
                  phrases=True,
@@ -151,19 +192,19 @@ class Text:
 
         """
 
-        self.nlp = Text.nlp
+        self.nlp = spacy.load("en")
 
         # disable parser and ner for a fast render
         if fast:
             self.nlp = spacy.load("en", disable=["parser", "ner"])
 
         # otherwise add pytextrank to the pipeline
+        # this will enable keyword extraction and sentence parser
         else:
             tr = pytextrank.TextRank()
-            # Text.nlp = spacy.load("en")
             self.nlp.add_pipe(tr.PipelineComponent, name='textrank', last=True)
-            self._keywords = []
 
+        # show me whatcha doin' spacy
         print(f"nlp.pipe_names = {self.nlp.pipe_names}")
 
         # read in the raw documents
@@ -173,36 +214,27 @@ class Text:
         if remove_html_tags:
             self.raw_docs = self.remove_tags()
 
-        # FIXME: loop has to be True because of bug in spacy pytextrank
-        self._docs = Docs(text=self,
-                          docs=self._nlp_docs(loop=True))
+        # keywords will be set in self._nlp_docs()
+        self._keywords = None
 
-        #self._raw_tokens = self.get_raw_tokens()
+        # FIXME: for extracting keywords set loop=True because of bug in spacy pytextrank
+        self._docs = Docs(text=self,
+                          docs=self._nlp_docs(loop=not fast),
+                          fast=fast)
 
         # tokenize and process
         self._tokens = self.process_tokens(lemmatize=lemmatize, phrases=phrases)
 
-        if "parser" in self.nlp.pipe_names:
-            pass
-            #self._sentences = self.get_sentences()
-
-        #self._token_counter = self._counter()
-        self._clean_docs = self.get_clean_docs()
-        self._dictionary = Dictionary(self.tokens)
-        self._corpus_bow = self.get_corpus_bow()
-        self._corpus_tfidf = self.get_corpus_tfidf()
-
-
-        self.lda = LDA(corpus=self.corpus_tfidf,
-                       dictionary=self.dictionary,
-                       tokens=self.tokens)
-
-        self.hdp = HDP(corpus=self.corpus_tfidf,
-                       dictionary=self.dictionary,
-                       tokens=self.tokens)
-
-        self.similarity = Similarity(corpus=self.corpus_tfidf,
-                                     num_features=len(self.dictionary))
+        # self.lda = LDA(corpus=self.corpus_tfidf,
+        #                dictionary=self.dictionary,
+        #                tokens=self.tokens)
+        #
+        # self.hdp = HDP(corpus=self.corpus_tfidf,
+        #                dictionary=self.dictionary,
+        #                tokens=self.tokens)
+        #
+        # self.similarity = Similarity(corpus=self.corpus_tfidf,
+        #                              num_features=len(self.dictionary))
 
     # ------------------------
     #       properties
@@ -212,10 +244,9 @@ class Text:
     def docs(self):
         return self._docs
 
-
-    @property
+    @lazy_property
     def clean_docs(self):
-        return self._clean_docs
+        return self.get_clean_docs()
 
     @property
     def raw_tokens(self):
@@ -228,27 +259,38 @@ class Text:
 
     @property
     def token_ids(self):
-        #try:
-         #   self._token_ids
-        #except AttributeError:
         self._token_ids = [[self.dictionary.token2id[token] for token in doc] for doc in
                            self.tokens]
         return self._token_ids
+
+    @property
+    def keywords(self):
+        return self._keywords
+
     @property
     def token_counter(self):
         return self._token_counter()
 
-    @property
+    @lazy_property
     def dictionary(self):
-        return self._dictionary
+        return Dictionary(self.tokens)
 
-    @property
+    @lazy_property
     def corpus_bow(self):
-        return self._corpus_bow
+        return self.get_corpus_bow()
 
-    @property
+    @lazy_property
     def corpus_tfidf(self):
-        return self._corpus_tfidf
+        return self.get_corpus_tfidf()
+
+    @lazy_property
+    def sentences(self):
+        if "parser" in self.nlp.pipe_names:
+            return Sentences(self.get_sentences())
+        else:
+            raise AttributeError("add 'parser' to the nlp.pipes or set fast=False to get "
+                                 "sentences.")
+
     # ------------------------
     #         methods
     # ------------------------
@@ -265,6 +307,7 @@ class Text:
                                desc="Passing docs through nlp.pipe"))
 
         else:
+            print("looping")
             #self._keywords = []
             docs = []
             for doc in tqdm(self.nlp.pipe(self.raw_docs),
@@ -288,7 +331,8 @@ class Text:
     def process_tokens(self, lemmatize=True, lower=True, phrases=True):
 
         tokens = [[token for token in raw_token
-                   if (not token.is_stop) and (token.pos_ not in Text.remove_pos)]
+                   if (not token.is_stop) and (token.is_alpha) and
+                        (token.pos_ not in Text.remove_pos)]
                   for raw_token in tqdm(self.docs, total=self.n_docs, desc="Processing tokens")]
 
         if lemmatize:
@@ -376,7 +420,6 @@ class Text:
 
     def get_sentences(self):
         """Return a list of spacy sentences"""
-
         sents = [[sent for sent in doc.sents] for doc in self.docs]
 
         return list(sents)
@@ -435,16 +478,27 @@ class Text:
         filtered_tokens = [[token for token in doc if token in dictionary.token2id]
                            for doc in self.tokens]
         if inplace:
+            self._dictionary = dictionary
             self._tokens = filtered_tokens
             self._clean_docs = self.get_clean_docs()
         else:
             return filtered_tokens
 
-    def bow_transformer(self, doc):
+    def bow_transformer(self, docs):
         """transforms the input doc to bag-of-words according to the corpus bow"""
-        doc_bow = self.dictionary.doc2bow(doc.split(" "))
 
-        return doc_bow
+        single_doc = False
+        if type(docs) is str:
+            docs = [docs]
+            single_doc = True
+
+        print(docs)
+        docs_bow = list([self.dictionary.doc2bow(doc.split(" ")) for doc in docs])
+
+        if single_doc:
+            docs_bow = docs_bow[0]
+
+        return docs_bow
 
     def get_corpus_bow(self):
         """Construct the corpus bag of words
@@ -526,6 +580,8 @@ class Text:
             print("Nothing found!")
 
         return idx_with_token
+
+
 
 
 
