@@ -10,7 +10,10 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
+import spacy
+
 import wordcloud
+
 
 import gensim
 from gensim.corpora import Dictionary
@@ -23,168 +26,411 @@ from nltk.corpus import stopwords
 
 #TODO: add the equivalent for terminal
 from IPython.core.display import HTML, display
+import pytextrank
 from tqdm.auto import tqdm
+
 import logging
 logger = logging.getLogger("Log Message")
 logger.setLevel(logging.INFO)
 
 from nloop.lib.topicmodeling import LDA, HDP
 from nloop.lib.similarity import Similarity
+from nloop.lib.utils import lazy_property
+
+import re
 
 #########################################################
 #                  Text Object
 #########################################################
 
+class Docs:
+
+    def __init__(self, text, docs, fast=True):
+        self._docs = docs
+
+
+
+    def __getitem__(self, item):
+        return self._docs[item]
+
+    def __repr__(self):
+        return repr(self._docs)
+
+    @ property
+    def keywords(self):
+        return self._keywords
+
+
+class Keywords:
+
+    def __init__(self, keywords):
+
+        self._keywords = keywords
+        self._texts = [[kw.text for kw in kws] for kws in self._keywords]
+        self._ranks = [[kw.rank for kw in kws] for kws in self._keywords]
+        self._counts = [[kw.count for kw in kws] for kws in self._keywords]
+        self._chunks = [[kw.chunks for kw in kws] for kws in self._keywords]
+
+
+    def __getitem__(self, item):
+        return self._keywords[item]
+
+    def __repr__(self):
+        return repr(self._keywords)
+
+    @property
+    def texts(self):
+        return self._texts
+
+    @property
+    def ranks(self):
+        return self._ranks
+
+    @property
+    def counts(self):
+        return self._counts
+
+    @property
+    def chunks(self):
+        return self._chunks
+
+
+class Sentences:
+
+    def __init__(self, sentences):
+
+        self._sentences = sentences
+        #self._ents = [[kw.ents for kw in kws] for kws in self._ents]
+        #self._counts = [[kw.count for kw in kws] for kws in self._keywords]
+        #self._chunks = [[kw.chunks for kw in kws] for kws in self._keywords]
+
+
+    def __getitem__(self, item):
+        return self._sentences[item]
+
+    def __repr__(self):
+        return repr(self._sentences)
+
+    @lazy_property
+    def texts(self):
+        return [[sent.text for sent in sents] for sents in self._sentences]
+
+    @lazy_property
+    def ents(self):
+        return [[sent.ents for sent in sents] for sents in self._sentences]
+
+    @lazy_property
+    def noun_chunks(self):
+        return [[list(sent.noun_chunks) for sent in sents] for sents in self._sentences]
+
+    @lazy_property
+    def start(self):
+        return [[sent.start for sent in sents] for sents in self._sentences]
+
+    @lazy_property
+    def end(self):
+        return [[sent.end for sent in sents] for sents in self._sentences]
+
+    @lazy_property
+    def start_char(self):
+        return [[sent.start_char for sent in sents] for sents in self._sentences]
+
+    @lazy_property
+    def end_char(self):
+        return [[sent.end_char for sent in sents] for sents in self._sentences]
+
+
 class Text:
 
+    # Full list here: https://spacy.io/api/annotation
+    remove_pos = ['ADP',
+                  'ADV',
+                  'AUX',
+                  'CONJ',
+                  'SCONJ',
+                  'INTJ',
+                  'DET',
+                  'PART',
+                  'PUNCT',
+                  'SYM',
+                  'SPACE',
+                  'NUM',
+                  'X',
+                  ]
+
+    tags_re = re.compile(r'<[^>]+>')
+
     def __init__(self,
-                 data,  # normally a list of lists:
-                 column=None,  # in case the input is a dataframe
+                 docs,  # normally a list of lists:
+                 fast=True,
+                 remove_html_tags=True,
+                 lemmatize=True,
+                 phrases=True,
                  ):
+
         """
         Class for loading, processing, and modeling text data
 
         Parameters
         ----------
-        data: list or pandas.DataFrame
+        docs: list
             Input raw data.
-            Can be a list of docs [ doc1, doc2, ... ] or a pandas dataframe.
+            Can be a list of docs [ doc1, doc2, ... ] or a pandas dataframe column.
             Each doc is a string.
 
-        column: str
-            Selects a column from the input data as data[column].
-            Set to None if the input is a list of documents.
+        fast: bool
+            If True, "parser" and "ner" are removed from the nlp pipeline
+
+        remove_html_tags: bool
+            If True, <html tags> will be removed before processing the text
+
+        lemmatize: bool
+            If True, the processed tokens will be lemmatized
+
+        phrases: bool
+            If True, bigrams and trigrams are extracted using gensim.models.Phrases
+
         """
 
+        self.nlp = spacy.load("en")
 
-        self.lemmatizer = WordNetLemmatizer()
-        self.stemmer = PorterStemmer()
-        self.stops = stopwords.words("english")
+        # disable parser and ner for a fast render
+        if fast:
+            self.nlp = spacy.load("en", disable=["parser", "ner"])
 
-        #TODO: add __slots__
-        self.docs = data  # pandas dataframe
-        if column:
-            self.docs = data[column]
-        self.n_docs = len(self.docs)
+        # otherwise add pytextrank to the pipeline
+        # this will enable keyword extraction and sentence parser
+        else:
+            tr = pytextrank.TextRank()
+            self.nlp.add_pipe(tr.PipelineComponent, name='textrank', last=True)
+
+        # show me whatcha doin' spacy
+        print(f"nlp.pipe_names = {self.nlp.pipe_names}")
+
+        # read in the raw documents
+        self.raw_docs = docs
+        self.n_docs = len(self.raw_docs)
+
+        if remove_html_tags:
+            self.raw_docs = self.remove_tags()
+
+        # keywords will be set in self._nlp_docs()
+        self._keywords = None
+
+        # FIXME: for extracting keywords set loop=True because of bug in spacy pytextrank
+        self._docs = Docs(text=self,
+                          docs=self._nlp_docs(loop=not fast),
+                          fast=fast)
 
         # tokenize and process
-        self._tokens = self.process()
-        self._token_counter = self.counter()
-        self._dictionary = self.get_dictionary()
-        self._corpus_bow = self.get_corpus_bow()
-        self._corpus_tfidf = self.get_corpus_tfidf()
+        self._tokens = self.process_tokens(lemmatize=lemmatize, phrases=phrases)
 
-        self.lda = LDA(corpus=self.corpus_tfidf,
-                       dictionary=self.dictionary,
-                       tokens=self.tokens)
-
-        self.hdp = HDP(corpus=self.corpus_tfidf,
-                       dictionary=self.dictionary,
-                       tokens=self.tokens)
-
-        self.similarity = Similarity(corpus=self.corpus_tfidf,
-                                     num_features=len(self.dictionary))
+        # self.lda = LDA(corpus=self.corpus_tfidf,
+        #                dictionary=self.dictionary,
+        #                tokens=self.tokens)
+        #
+        # self.hdp = HDP(corpus=self.corpus_tfidf,
+        #                dictionary=self.dictionary,
+        #                tokens=self.tokens)
+        #
+        # self.similarity = Similarity(corpus=self.corpus_tfidf,
+        #                              num_features=len(self.dictionary))
 
     # ------------------------
     #       properties
     # ------------------------
 
     @property
+    def docs(self):
+        return self._docs
+
+    @lazy_property
+    def clean_docs(self):
+        return self.get_clean_docs()
+
+    @property
     def raw_tokens(self):
-        self._raw_tokens = list(self._tokenize())
-        return self._raw_tokens
+        #self._raw_tokens = list(self._tokenize())
+        return self.get_raw_tokens()
 
     @property
     def tokens(self):
-        return list(self._tokens)
+        return self._tokens
+
+    @property
+    def token_ids(self):
+        self._token_ids = [[self.dictionary.token2id[token] for token in doc] for doc in
+                           self.tokens]
+        return self._token_ids
+
+    @property
+    def keywords(self):
+        return self._keywords
 
     @property
     def token_counter(self):
-        return self._token_counter
+        return self._token_counter()
 
-    @property
+    @lazy_property
     def dictionary(self):
-        return self._dictionary
+        return Dictionary(self.tokens)
 
-    @property
+    @lazy_property
     def corpus_bow(self):
-        return self._corpus_bow
+        return self.get_corpus_bow()
 
-    @property
+    @lazy_property
     def corpus_tfidf(self):
-        return self._corpus_tfidf
+        return self.get_corpus_tfidf()
+
+    @lazy_property
+    def sentences(self):
+        if "parser" in self.nlp.pipe_names:
+            return Sentences(self.get_sentences())
+        else:
+            raise AttributeError("add 'parser' to the nlp.pipes or set fast=False to get "
+                                 "sentences.")
+
     # ------------------------
     #         methods
     # ------------------------
 
-    def _tokenize(self):
-        """generate a list of tokens of each document"""
-        for doc in self.docs:
-            doc = doc.replace("\n", " ")
-            yield gensim.utils.simple_preprocess(doc, deacc=True)
+    def remove_tags(self):
+        return [Text.tags_re.sub(" ", doc) for doc in tqdm(self.raw_docs,
+                total=self.n_docs,  desc="Removing HTML tags")]
 
 
-    # TODO: write another process function using sklearn?
-    def process(self,
-                remove_stops=True,
-                make_bigrams=True,
-                make_trigrams=True,
-                lemmatize=True,
-                stem=True,
-                ):
-        """Process text.docs using gensim:
-        (1) remove stopwords, (2) find bigrams and trigrams, (3) lemmatize, and (4) stem"""
+    def _nlp_docs(self, loop=True):
 
-        # initialize a token generator
-        Docs = self._tokenize()
+        if not loop:
+            docs = list(tqdm(self.nlp.pipe(self.raw_docs), total=self.n_docs,
+                               desc="Passing docs through nlp.pipe"))
 
-        print("Removing stopwords...")
-        if remove_stops:
-            # Remove stopworsds
-            Docs = [[word for word in doc if word not in self.stops and not word.isdigit()] for
-                    doc in tqdm(Docs, total=self.n_docs)]
+        else:
+            print("looping")
+            #self._keywords = []
+            docs = []
+            for doc in tqdm(self.nlp.pipe(self.raw_docs),
+                            total=self.n_docs,
+                            desc="Passing docs through nlp.pipe loop"):
+                #    d = self.nlp(doc)
+                keywords = [kw for kw in doc._.phrases]
+                self._keywords.append(keywords)
+                docs.append(doc)
 
-        # TODO: modify this so Docs can be passed as a generator
-        if make_bigrams:
-            bigrams = Phrases(Docs, delimiter=b" ", min_count=2)
+        return docs
 
-        if make_trigrams:
-            trigrams = Phrases(bigrams[Docs], delimiter=b" ", min_count=2)
+    def get_raw_tokens(self):
+
+        raw_tokens = [[token for token in doc] for doc in tqdm(self.docs,
+                        total=self.n_docs, desc="Extracting raw tokens")]
+
+        return raw_tokens
 
 
-        # extract bigrams and trigrams
-        if make_bigrams:
-            print("Finding bigrams...")
-            Docs = [bigrams[doc] for doc in tqdm(Docs, total=self.n_docs)]
+    def process_tokens(self, lemmatize=True, lower=True, phrases=True):
 
-        if make_trigrams:
-            #FIXME: Is this actually returning the correct trigrams?
-            # or is it returning 4-grams?
-            print("Finding trigrams...")
-            Docs = [trigrams[doc] for doc in tqdm(Docs, total=self.n_docs)]
-
+        tokens = [[token for token in raw_token
+                   if (not token.is_stop) and (token.is_alpha) and
+                        (token.pos_ not in Text.remove_pos)]
+                  for raw_token in tqdm(self.docs, total=self.n_docs, desc="Processing tokens")]
 
         if lemmatize:
-            # lemmatize the n-grams
-            print("Lemmatizing nouns...")
-            Docs = [[self.lemmatizer.lemmatize(word, pos="n") for word in doc]
-                    for doc in tqdm(Docs, total=self.n_docs)]
-            print("Lemmatizing verbs...")
-            Docs = [[self.lemmatizer.lemmatize(word, pos="v") for word in doc]
-                    for doc in tqdm(Docs, total=self.n_docs)]
+            tokens = [[token.lemma_ for token in doc] for doc in tokens]
+        else:
+            tokens = [[token.text for token in doc] for doc in tokens]
 
-        if stem:
-            # stem the n-grams
-            print("Stemming...")
-            Docs = [[self.stemmer.stem(word) for word in doc]
-                    for doc in tqdm(Docs, total=self.n_docs)]
+        if lower:
+            tokens = [[token.lower() for token in doc] for doc in tokens]
 
-            print("Done!")
-        return Docs
+        if phrases:
+            bigrams = Phrases(tokens, delimiter=b"_", min_count=2)
+            trigrams = Phrases(bigrams[tokens], delimiter=b"_", min_count=2)
 
-    def counter(self):
-        """Return a gensim counter of all tokens"""
+            # extract bigrams and trigrams
+
+            tokens = [bigrams[doc] for doc in tokens]
+            tokens = [trigrams[doc] for doc in tokens]
+
+        return tokens
+        # def _tokenize(self):
+        #     """generate a list of tokens of each document"""
+        #     for doc in self.raw_docs:
+        #         doc = doc.replace("\n", " ")
+        #         yield gensim.utils.simple_preprocess(doc, deacc=True)
+        #
+        #
+        # # TODO: write another process function using sklearn?
+        # def process(self,
+        #             remove_stops=True,
+        #             make_bigrams=True,
+        #             make_trigrams=True,
+        #             lemmatize=True,
+        #             stem=True,
+        #             ):
+        #     """Process text.raw_docs using gensim:
+        #     (1) remove_pos stopwords, (2) find bigrams and trigrams, (3) lemmatize, and (4) stem"""
+        #
+        #     # initialize a token generator
+        #     Docs = self._tokenize()
+        #
+        #     print("Removing stopwords...")
+        #     if remove_stops:
+        #         # Remove stopworsds
+        #         Docs = [[word for word in doc if word not in self.stops and not word.isdigit()] for
+        #                 doc in tqdm(Docs, total=self.n_docs)]
+        #
+        #     # TODO: modify this so Docs can be passed as a generator
+        #     if make_bigrams:
+        #         bigrams = Phrases(Docs, delimiter=b" ", min_count=2)
+        #
+        #     if make_trigrams:
+        #         trigrams = Phrases(bigrams[Docs], delimiter=b" ", min_count=2)
+        #
+        #
+        #     # extract bigrams and trigrams
+        #     if make_bigrams:
+        #         print("Finding bigrams...")
+        #         Docs = [bigrams[doc] for doc in tqdm(Docs, total=self.n_docs)]
+        #
+        #     if make_trigrams:
+        #         #FIXME: Is this actually returning the correct trigrams?
+        #         # or is it returning 4-grams?
+        #         print("Finding trigrams...")
+        #         Docs = [trigrams[doc] for doc in tqdm(Docs, total=self.n_docs)]
+        #
+        #
+        #     if lemmatize:
+        #         # lemmatize the n-grams
+        #         print("Lemmatizing nouns...")
+        #         Docs = [[self.lemmatizer.lemmatize(word, pos="n") for word in doc]
+        #                 for doc in tqdm(Docs, total=self.n_docs)]
+        #         print("Lemmatizing verbs...")
+        #         Docs = [[self.lemmatizer.lemmatize(word, pos="v") for word in doc]
+        #                 for doc in tqdm(Docs, total=self.n_docs)]
+        #
+        #     if stem:
+        #         # stem the n-grams
+        #         print("Stemming...")
+        #         Docs = [[self.stemmer.stem(word) for word in doc]
+        #                 for doc in tqdm(Docs, total=self.n_docs)]
+        #
+        #         print("Done!")
+        #     return Docs
+
+    def get_sentences(self):
+        """Return a list of spacy sentences"""
+        sents = [[sent for sent in doc.sents] for doc in self.docs]
+
+        return list(sents)
+
+    def _token_counter(self):
+        """Return the counts of all tokens"""
         return Counter([word for doc in self.tokens for word in doc])
+
+    def _token_frequency(self):
+        """Returns the frequency of all tokens"""
+        pass
 
     def show_wordcloud(self, figsize=(10, 10), dpi=100):
         """Plot the processed tokens wordcloud"""
@@ -199,11 +445,12 @@ class Text:
         plt.imshow(WC)
         plt.axis("off")
 
-    def get_dictionary(self,
-                       no_below=0,  # FIXME: find the optimal cutoff
-                       no_above=1,
-                       keep_n=None,
-                       keep_tokens=None,
+    def filter_extremes(self,
+                        no_below=0,  # FIXME: find the optimal cutoff
+                        no_above=1,
+                        keep_n=None,
+                        keep_tokens=None,
+                        inplace=True,
                        ):
         """Construct the tokens dictionary using gensim.corpora.Dictionary
 
@@ -222,11 +469,36 @@ class Text:
         keep_tokens : iterable of str
             Iterable of tokens that **must** stay in dictionary after filtering."""
 
-        dictionary = Dictionary(self.tokens)
-        dictionary.filter_extremes(no_below=no_below, no_above=no_above, keep_n=keep_n,
+        dictionary = deepcopy(self.dictionary)
+        dictionary.filter_extremes(no_below=no_below,
+                                   no_above=no_above,
+                                   keep_n=keep_n,
                                    keep_tokens=keep_tokens)
 
-        return dictionary
+        filtered_tokens = [[token for token in doc if token in dictionary.token2id]
+                           for doc in self.tokens]
+        if inplace:
+            self._dictionary = dictionary
+            self._tokens = filtered_tokens
+            self._clean_docs = self.get_clean_docs()
+        else:
+            return filtered_tokens
+
+    def bow_transformer(self, docs):
+        """transforms the input doc to bag-of-words according to the corpus bow"""
+
+        single_doc = False
+        if type(docs) is str:
+            docs = [docs]
+            single_doc = True
+
+        print(docs)
+        docs_bow = list([self.dictionary.doc2bow(doc.split(" ")) for doc in docs])
+
+        if single_doc:
+            docs_bow = docs_bow[0]
+
+        return docs_bow
 
     def get_corpus_bow(self):
         """Construct the corpus bag of words
@@ -236,14 +508,24 @@ class Text:
         corpus_bow = [self.dictionary.doc2bow(doc) for doc in self.tokens]
         return corpus_bow
 
+    def bow2tfidf(self, bow):
+
+        return TfidfModel(self.corpus_bow)[bow]
+
+    def tfidf_transformer(self, doc):
+        """transform the input doc to Tfidf according to the corpus tfidf model"""
+        doc_bow = self.bow_transformer(doc)
+        doc_tfidf = self.bow2tfidf(doc_bow)
+        return doc_tfidf
+
     def get_corpus_tfidf(self):
         """Construct the corpus Tfidf (term frequency inverse document frequency
 
         This uses gensim.models.TfidfModel
         """
 
-        self._bow2tfidf = TfidfModel(self.corpus_bow)
-        corpus_tfidf = [self._bow2tfidf[bow] for bow in self.corpus_bow]
+        bow2tfidf = TfidfModel(self.corpus_bow)
+        corpus_tfidf = [bow2tfidf[bow] for bow in self.corpus_bow]
         return corpus_tfidf
 
     def get_vocab(self):
@@ -258,6 +540,11 @@ class Text:
         corpus_id = [self.dictionary.doc2idx(doc) for doc in self.tokens]
         return corpus_id
 
+    def get_clean_docs(self):
+
+        return [" ".join(token) for token in tqdm(self.tokens,
+                         total=self.n_docs, desc="Putting clean tokens back together")]
+
     # TODO: fix bug with bigrams and trigrams
     # TODO: add option for printing in terminal
     def search_for_token(self, token, color="red", font_size=5):
@@ -268,7 +555,7 @@ class Text:
         token = self.lemmatizer.lemmatize(token, pos="v")
         token = self.stemmer.stem(token)
 
-        print(f"Looking for '{token}' in all the docs...")
+        print(f"Looking for '{token}' in all the raw_docs...")
 
         # docs_with_token = []
         idx_with_token = []
@@ -293,6 +580,8 @@ class Text:
             print("Nothing found!")
 
         return idx_with_token
+
+
 
 
 

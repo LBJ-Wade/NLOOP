@@ -1,7 +1,12 @@
-# NLOOP
-_Natural Language [Object Oriented] Processing_
+<img src="logo.png" height="250"/>
 
-**NLOOP** is a python package that provides a simplified and convenient interface for processing, analyzing, and modeling text data using popular natural language processing libraries such as [NLTK](http://www.nltk.org/), [gensim](https://radimrehurek.com/gensim/), and [spaCy](https://spacy.io/). 
+# NLOOP
+_Documents are objects, so let's treat them as such..._
+
+
+**NLOOP** is a python package that provides a convenient interface for
+ processing, analyzing, and modeling text data using popular natural language
+  processing libraries such as [spaCy](https://spacy.io/), [gensim](https://radimrehurek.com/gensim/), and sometimes [NLTK](http://www.nltk.org/)! 
 
 Install NLOOP by running the following in the command line:
 
@@ -14,7 +19,9 @@ pip install [-e] .
 ```
 
 _NOTE_: Don't forget the `.` at the end! 
-The `-e` argument will install the package in editable mode which is suitable for developement. If you want to modify the code use this option.
+The `-e` argument will install the package in editable mode which is suitable
+ for developement. Since currently the code is being regularly updated
+ , using this option is recommended. 
 
 _(optional)_
 
