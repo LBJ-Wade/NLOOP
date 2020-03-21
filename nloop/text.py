@@ -134,8 +134,8 @@ class Text:
         #                dictionary=self.dictionary,
         #                tokens=self.tokens)
         #
-        # self.similarity = Similarity(corpus=self.corpus_tfidf,
-        #                              num_features=len(self.dictionary))
+        self.similarity = Similarity(corpus=self.corpus_tfidf,
+                                     num_features=len(self.dictionary))
 
     # ------------------------
     #       properties
@@ -389,7 +389,7 @@ class Text:
 
     # TODO: fix bug with bigrams and trigrams
     # TODO: add option for printing in terminal
-    def search_for_token(self, token, color="red", font_size=5, exact=True):
+    def search_for_token(self, token, color="#FFFF00", font_size=5, exact=True):
         """search the corpus for the given token and highlight/return the documents in which the
         token occurs"""
 
@@ -411,8 +411,12 @@ class Text:
                 idx_with_token.append(idx)
 
                 doc_text = doc_text.replace(token,
-                                            f"<b><span style='color:{color}'><font size"
+                                            f"<b><span style='background-color:{color}'><font size"
                                             f"={font_size}>{token}</font></span></b>")
+
+                # doc_text = doc_text.replace(token,
+                #                             f"<b><span style='background-color:{color};fontsize"
+                #                             f":{font_size}'>{token}</span></b>")
                 display(HTML(doc_text))
 
 
