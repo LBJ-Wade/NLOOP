@@ -508,15 +508,15 @@ class Sentences:
 
     @lazy_property
     def texts(self):
-        return [[sent.text for sent in sents] for sents in self._sentences]
+        return [tuple(sent.text for sent in sents) for sents in self._sentences]
 
     @lazy_property
     def ents(self):
-        return [[sent.ents for sent in sents] for sents in self._sentences]
+        return [tuple(sent.ents for sent in sents) for sents in self._sentences]
 
     @lazy_property
     def noun_chunks(self):
-        return [[list(sent.noun_chunks) for sent in sents] for sents in self._sentences]
+        return [tuple(tuple(sent.noun_chunks) for sent in sents) for sents in self._sentences]
 
     @lazy_property
     def start(self):
