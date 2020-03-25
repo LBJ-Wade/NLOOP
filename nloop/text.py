@@ -101,7 +101,7 @@ class Text:
         """
 
         self.nlp = spacy.load(spacy_model)
-        print(f'spacy_model: {spacy_model}"')
+        print(f'spacy_model: "{spacy_model}"')
         self.keep_pos = keep_pos
         print(f"Only keeping: {self.keep_pos}")
 
@@ -216,7 +216,7 @@ class Text:
 
         else:
             # This is currently necessary for extracting keywords because of a bug in spacy
-            print("looping")
+            #print("looping")
 
             docs = []
             self._keywords = []
