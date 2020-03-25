@@ -46,29 +46,34 @@ import re
 class Text:
 
     # Full list here: https://spacy.io/api/annotation
-    remove_pos = ['ADP',
-                  'ADV',
-                  'AUX',
-                  'CONJ',
-                  'SCONJ',
-                  'INTJ',
-                  'DET',
-                  'PART',
-                  'PUNCT',
-                  'SYM',
-                  'SPACE',
-                  'NUM',
-                  'X',
-                  ]
+    # remove_pos = ['ADP',
+    #               'ADV',
+    #               'AUX',
+    #               'CONJ',
+    #               'SCONJ',
+    #               'INTJ',
+    #               'DET',
+    #               'PART',
+    #               'PUNCT',
+    #               'SYM',
+    #               'SPACE',
+    #               'NUM',
+    #               'X',
+    #               ]
 
     tags_re = re.compile(r'<[^>]+>')
+
+
+    #spacy_model = "en"  # switch to "en_core_web_lg" for better results
 
     def __init__(self,
                  docs,  # normally a list of lists:
                  fast=True,
+                 keep_pos=["ADJ", "NOUN", "PROPN", "VERB"],  # https://spacy.io/api/annotation
                  remove_html_tags=True,
                  lemmatize=True,
                  phrases=True,
+                 spacy_model="en",  # switch to "en_core_web_lg" for better results
                  ):
 
         """
@@ -95,11 +100,14 @@ class Text:
 
         """
 
-        self.nlp = spacy.load("en")
+        self.nlp = spacy.load(spacy_model)
+        print(f'spacy_model: {spacy_model}"')
+        self.keep_pos = keep_pos
+        print(f"Only keeping: {self.keep_pos}")
 
         # disable parser and ner for a fast render
         if fast:
-            self.nlp = spacy.load("en", disable=["parser", "ner"])
+            self.nlp = spacy.load(spacy_model, disable=["parser", "ner"])
 
         # otherwise add pytextrank to the pipeline
         # this will enable keyword extraction and sentence parser
@@ -200,7 +208,6 @@ class Text:
         return [Text.tags_re.sub(" ", doc) for doc in tqdm(self.raw_docs,
                 total=self.n_docs,  desc="Removing HTML tags")]
 
-
     def _nlp_docs(self, loop=True):
 
         if not loop:
@@ -235,8 +242,8 @@ class Text:
     def process_tokens(self, lemmatize=True, lower=True, phrases=True):
 
         tokens = [[token for token in raw_token
-                   if (not token.is_stop) and (token.is_alpha) and
-                        (token.pos_ not in Text.remove_pos)]
+                   # TODO: Add like_num option?
+                  if (token.pos_ in self.keep_pos) and  (not token.is_stop) and (token.is_alpha)]
                   for raw_token in tqdm(self.docs, total=self.n_docs, desc="Processing tokens")]
 
         if lemmatize:
@@ -248,11 +255,11 @@ class Text:
             tokens = [[token.lower() for token in doc] for doc in tokens]
 
         if phrases:
+            # TODO: Add n-gram pattern matching with spacy
             bigrams = Phrases(tokens, delimiter=b"_", min_count=2)
             trigrams = Phrases(bigrams[tokens], delimiter=b"_", min_count=2)
 
             # extract bigrams and trigrams
-
             tokens = [bigrams[doc] for doc in tokens]
             tokens = [trigrams[doc] for doc in tokens]
 
@@ -334,7 +341,6 @@ class Text:
             docs = [docs]
             single_doc = True
 
-        print(docs)
         docs_bow = list([self.dictionary.doc2bow(doc.split(" ")) for doc in docs])
 
         if single_doc:
