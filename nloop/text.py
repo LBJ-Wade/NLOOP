@@ -444,6 +444,17 @@ class Docs:
     def __repr__(self):
         return repr(self._docs)
 
+    @property
+    def texts(self):
+        return [doc.text for doc in self._docs]
+
+    @property
+    def ents(self):
+        return [doc.ents for doc in self._docs]
+
+    @property
+    def noun_chunks(self):
+        return [tuple(doc.noun_chunks) for doc in self._docs]
 
 class Keywords:
 
