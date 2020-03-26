@@ -7,6 +7,7 @@ tqdm>=4.40.0
 pyyaml>=5.1.2
 spacy>=2.2.3
 spacy-lookups-data>=0.2.0
+pytextrank==2.0.0
 wordcloud>=1.6.0
 scikit-learn>=0.22
 pyLDAvis>=2.1.2
