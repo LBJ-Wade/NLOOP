@@ -134,9 +134,9 @@ class Text:
         # tokenize and process
         self._tokens = self.process_tokens(lemmatize=lemmatize, phrases=phrases)
 
-        # self.lda = LDA(corpus=self.corpus_tfidf,
-        #                dictionary=self.dictionary,
-        #                tokens=self.tokens)
+        self.lda = LDA(corpus=self.corpus_tfidf,
+                       dictionary=self.dictionary,
+                       tokens=self.tokens)
         #
         # self.hdp = HDP(corpus=self.corpus_tfidf,
         #                dictionary=self.dictionary,
@@ -174,7 +174,7 @@ class Text:
 
     @property
     def keywords(self):
-        return self._keywords
+        return Keywords(self._keywords)
 
     @property
     def token_counter(self):
@@ -228,7 +228,6 @@ class Text:
                 keywords = [kw for kw in doc._.phrases]
                 self._keywords.append(keywords)
                 docs.append(doc)
-
         return docs
 
     def get_raw_tokens(self):
